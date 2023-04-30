@@ -1,7 +1,9 @@
+import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
 import cv2
+import numpy as np
 import dlib
 
 
@@ -63,10 +65,10 @@ class PhotoSeparatorGUI:
         if not self.check_directories(input_dir, output_dir, faces_dir):
             return
         
-        # Chama a função separate_photos para executar a separação das fotos
+        # Separe as fotos com base no reconhecimento facial
         self.separate_photos(input_dir, output_dir, faces_dir)
-
         print('Executou corretamente!')
+
 
 
 
@@ -102,9 +104,12 @@ class PhotoSeparatorGUI:
     
 
     def separate_photos(self, input_dir, output_dir, faces_dir):
-        # Carregue o detector de faces e o shape predictor
+        """Função principal para gerenciar a separação de fotos"""
+
+        # Carregue o detector de faces, o shape predictor e o modelo de reconhecimento facial
         detector = dlib.get_frontal_face_detector()
         predictor = dlib.shape_predictor(os.path.join(faces_dir, "shape_predictor_68_face_landmarks.dat"))
+        self.facerec = dlib.face_recognition_model_v1(os.path.join(faces_dir, "dlib_face_recognition_resnet_model_v1.dat"))
 
         # Itere sobre todas as imagens no diretório de entrada
         for filename in os.listdir(input_dir):
@@ -121,7 +126,7 @@ class PhotoSeparatorGUI:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             faces = detector(gray)
 
-            # Separe cada face encontrada na imagem
+            # Separe e agrupe cada face encontrada na imagem
             for i, face in enumerate(faces):
                 # Obtenha as landmarks faciais
                 landmarks = predictor(gray, face)
@@ -133,9 +138,52 @@ class PhotoSeparatorGUI:
                 aligned_face = image[aligned_face_bbox.top():aligned_face_bbox.bottom(),
                                     aligned_face_bbox.left():aligned_face_bbox.right()]
 
-                # Salve a face alinhada no diretório de saída
-                output_filename = f"{os.path.splitext(filename)[0]}_face{i}{os.path.splitext(filename)[1]}"
-                cv2.imwrite(os.path.join(output_dir, output_filename), aligned_face)
+                # Salve a face alinhada em um diretório temporário
+                temp_face_path = os.path.join(output_dir, "temp", f"{filename}_face{i}.jpg")
+                os.makedirs(os.path.dirname(temp_face_path), exist_ok=True)
+                cv2.imwrite(temp_face_path, aligned_face)
+
+                # Compare a face alinhada com as faces salvas nos subdiretórios do diretório de saída
+                found_similar_face = False
+                for subdir in os.listdir(output_dir):
+                    subdir_path = os.path.join(output_dir, subdir)
+                    if not os.path.isdir(subdir_path) or subdir == "temp":
+                        continue
+
+                    # Compare a face alinhada com a primeira face em cada subdiretório
+                    sample_face_path = os.path.join(subdir_path, os.listdir(subdir_path)[0])
+                    sample_face = cv2.imread(sample_face_path)
+
+                    if sample_face is not None:
+                        if self.compare_faces(aligned_face, sample_face):
+                            # Se uma face similar for encontrada, salve a face alinhada no subdiretório correspondente
+                            final_face_path = os.path.join(subdir_path, f"{filename}_face{i}.jpg")
+                            os.rename(temp_face_path, final_face_path)
+                            found_similar_face = True
+                            break
+
+                if not found_similar_face:
+                    # Se não encontrar nenhuma face similar, crie um novo subdiretório e salve a face alinhada nele
+                    new_subdir_path = os.path.join(output_dir, f"face_group{len(os.listdir(output_dir))}")
+                    os.makedirs(new_subdir_path, exist_ok=True)
+                    final_face_path = os.path.join(new_subdir_path, f"{filename}_face{i}.jpg")
+                    os.rename(temp_face_path, final_face_path)
+
+        # Remova o diretório temporário
+        shutil.rmtree(os.path.join(output_dir, "temp"))
+
+
+    def compare_faces(self, face1, face2, threshold=0.6):
+        """Compara duas faces usando o modelo de reconhecimento facial."""
+        # Calcule as descrições das faces
+        face1_descriptor = self.facerec.compute_face_descriptor(face1)
+        face2_descriptor = self.facerec.compute_face_descriptor(face2)
+
+        # Calcule a distância euclidiana entre as descrições das faces
+        distance = np.linalg.norm(np.array(face1_descriptor) - np.array(face2_descriptor))
+
+        # Retorne True se a distância for menor que o limite, caso contrário, retorne False
+        return distance < threshold
 
 
     def create_widgets(self):
