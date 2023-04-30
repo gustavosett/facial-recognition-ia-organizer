@@ -5,6 +5,7 @@ import os
 import cv2
 import numpy as np
 import dlib
+from unidecode import unidecode
 
 
 class PhotoSeparatorGUI:
@@ -70,8 +71,6 @@ class PhotoSeparatorGUI:
         print('Executou corretamente!')
 
 
-
-
     def print_error(self, title, message):
         """Imprime uma mensagem de erro."""
         messagebox.showerror(title, message)
@@ -111,14 +110,18 @@ class PhotoSeparatorGUI:
         predictor = dlib.shape_predictor(os.path.join(faces_dir, "shape_predictor_68_face_landmarks.dat"))
         self.facerec = dlib.face_recognition_model_v1(os.path.join(faces_dir, "dlib_face_recognition_resnet_model_v1.dat"))
 
+
         # Itere sobre todas as imagens no diretório de entrada
         for filename in os.listdir(input_dir):
-            file_path = os.path.join(input_dir, filename)
-            if not os.path.isfile(file_path):
+            decoded_filename = unidecode(filename)
+            src = os.path.join(input_dir, filename)
+            dst = os.path.join(input_dir, decoded_filename)
+            os.rename(src, dst)
+            if not os.path.isfile(src):
                 continue
 
             # Carregue a imagem usando o OpenCV
-            image = cv2.imread(file_path)
+            image = cv2.imread(src)
             if image is None:
                 continue
 
@@ -132,7 +135,7 @@ class PhotoSeparatorGUI:
                 landmarks = predictor(gray, face)
 
                 # Calcule a bounding box alinhada para a face
-                aligned_face_bbox = dlib.get_face_chip_details([landmarks], size=256)[0].rect
+                aligned_face_bbox = dlib.get_face_chip_details([dlib.full_object_detection(face, landmarks)], size=256)[0].rect
 
                 # Recorte a face alinhada da imagem
                 aligned_face = image[aligned_face_bbox.top():aligned_face_bbox.bottom(),
@@ -170,7 +173,9 @@ class PhotoSeparatorGUI:
                     os.rename(temp_face_path, final_face_path)
 
         # Remova o diretório temporário
-        shutil.rmtree(os.path.join(output_dir, "temp"))
+        if os.path.exists(os.path.join(output_dir, "temp")):
+            shutil.rmtree(os.path.join(output_dir, "temp"))
+
 
 
     def compare_faces(self, face1, face2, threshold=0.6):
