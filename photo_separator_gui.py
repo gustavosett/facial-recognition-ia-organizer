@@ -104,73 +104,39 @@ class PhotoSeparatorGUI:
     
 
     def separate_photos(self, input_dir, output_dir, faces_dir):
-        """Função principal para gerenciar a separação de fotos"""
-
-        # Carregue o detector de faces, o shape predictor e o modelo de reconhecimento facial
         detector = dlib.get_frontal_face_detector()
-        predictor = dlib.shape_predictor(os.path.join(faces_dir, "shape_predictor_68_face_landmarks.dat"))
-        self.facerec = dlib.face_recognition_model_v1(os.path.join(faces_dir, "dlib_face_recognition_resnet_model_v1.dat"))
+        sp = dlib.shape_predictor(os.path.join(faces_dir, 'shape_predictor_68_face_landmarks.dat'))
+        
+        for root, dirs, files in os.walk(input_dir):
+            for file in files:
+                if file.endswith(".jpg") or file.endswith(".jpeg") or file.endswith(".png"):
+                    input_file_path = os.path.join(root, file)
+                    img = dlib.load_rgb_image(input_file_path)
+                    dets = detector(img, 1)
 
-        # Itere sobre todas as imagens no diretório de entrada
-        for filename in os.listdir(input_dir):
-            file_path = os.path.join(input_dir, filename)
-            if not os.path.isfile(file_path):
-                continue
+                    if len(dets) > 0:
+                        # Create a dlib.full_object_detections object
+                        full_detections = dlib.full_object_detections()
 
-            # Carregue a imagem usando o OpenCV
-            image = cv2.imread(file_path)
-            if image is None:
-                continue
+                        for k, d in enumerate(dets):
+                            shape = sp(img, d)
+                            # Create a full_object_detection using the rectangle and the parts of the shape
+                            full_detection = dlib.full_object_detection(d, shape.parts())
+                            # Add the full_object_detection to the full_object_detections object
+                            full_detections.append(full_detection)
 
-            # Detecte faces na imagem
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            faces = detector(gray)
+                        # Pass the full_detections object to the dlib.get_face_chip_details() function
+                        chip_details_list = dlib.get_face_chip_details(full_detections, size=256)
 
-            # Separe e agrupe cada face encontrada na imagem
-            for i, face in enumerate(faces):
-                # Obtenha as landmarks faciais
-                landmarks = predictor(gray, face)
+                        for chip_details in chip_details_list:
+                            face_chip = dlib.extract_image_chip(img, chip_details)
+                            output_file_path = os.path.join(output_dir, f"{os.path.splitext(file)[0]}_face_{chip_details.rect.left()}_{chip_details.rect.top()}{os.path.splitext(file)[1]}")
+                            dlib.save_image(face_chip, output_file_path)
+                            print('\033[1;49;32m' + f'Face found in {file}!!' + '\033[m')
+                    else:
+                        print('\033[1;49;31m' + f"No face detected in {file}" + '\033[m')
 
-                # Calcule a bounding box alinhada para a face
-                aligned_face_bbox = dlib.get_face_chip_details([landmarks], size=256)[0].rect
 
-                # Recorte a face alinhada da imagem
-                aligned_face = image[aligned_face_bbox.top():aligned_face_bbox.bottom(),
-                                    aligned_face_bbox.left():aligned_face_bbox.right()]
-
-                # Salve a face alinhada em um diretório temporário
-                temp_face_path = os.path.join(output_dir, "temp", f"{filename}_face{i}.jpg")
-                os.makedirs(os.path.dirname(temp_face_path), exist_ok=True)
-                cv2.imwrite(temp_face_path, aligned_face)
-
-                # Compare a face alinhada com as faces salvas nos subdiretórios do diretório de saída
-                found_similar_face = False
-                for subdir in os.listdir(output_dir):
-                    subdir_path = os.path.join(output_dir, subdir)
-                    if not os.path.isdir(subdir_path) or subdir == "temp":
-                        continue
-
-                    # Compare a face alinhada com a primeira face em cada subdiretório
-                    sample_face_path = os.path.join(subdir_path, os.listdir(subdir_path)[0])
-                    sample_face = cv2.imread(sample_face_path)
-
-                    if sample_face is not None:
-                        if self.compare_faces(aligned_face, sample_face):
-                            # Se uma face similar for encontrada, salve a face alinhada no subdiretório correspondente
-                            final_face_path = os.path.join(subdir_path, f"{filename}_face{i}.jpg")
-                            os.rename(temp_face_path, final_face_path)
-                            found_similar_face = True
-                            break
-
-                if not found_similar_face:
-                    # Se não encontrar nenhuma face similar, crie um novo subdiretório e salve a face alinhada nele
-                    new_subdir_path = os.path.join(output_dir, f"face_group{len(os.listdir(output_dir))}")
-                    os.makedirs(new_subdir_path, exist_ok=True)
-                    final_face_path = os.path.join(new_subdir_path, f"{filename}_face{i}.jpg")
-                    os.rename(temp_face_path, final_face_path)
-
-        # Remova o diretório temporário
-        shutil.rmtree(os.path.join(output_dir, "temp"))
 
 
     def compare_faces(self, face1, face2, threshold=0.6):
