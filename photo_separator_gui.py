@@ -1,28 +1,38 @@
+import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
+import cv2
 import numpy as np
 import dlib
-import concurrent.futures
-from concurrent.futures import ThreadPoolExecutor
 import threading
 
 
 class PhotoSeparatorGUI:
+    """
+    Interface gráfica de seleção de diretorios de fotos
+    e aplicar separação com base em reconhecimento facial.
+    @gustavosett #rev 30/04/2023
+    """
+
+
     def __init__(self):
+        # Inicializa a janela principal
         self.root = tk.Tk()
         self.root.title('Separador de Fotos por Reconhecimento Facial')
 
+        # Inicializa as variáveis de diretório
         self.input_dir_var = tk.StringVar()
         self.output_dir_var = tk.StringVar()
         self.faces_dir_var = tk.StringVar()
 
-        self.lock = threading.Lock()
-
+        # Cria e organiza os widgets na janela
         self.create_widgets()
         self.arrange_widgets()
 
         self.facerec = dlib.face_recognition_model_v1(os.path.join('dlib_face_recognition_resnet_model_v1.dat'))
+
+
 
     def select_input_dir(self):
         input_dir = filedialog.askdirectory()
@@ -44,13 +54,17 @@ class PhotoSeparatorGUI:
         if not self.check_directories(input_dir, output_dir, faces_dir):
             return
         
-        self.separate_photos(input_dir, output_dir, faces_dir)
+        threading.Thread(target=self.separate_photos, args=(input_dir, output_dir, faces_dir)).start()
+
 
     def print_error(self, title, message):
+        """Imprime uma mensagem de erro."""
         messagebox.showerror(title, message)
         print(f'{title}: {message}')
 
+
     def check_directories(self, input_dir, output_dir, faces_dir):
+        """Verifica se os diretórios foram selecionados, se são distintos e se são válidos."""
         error_messages = [
             ('Por favor, selecione um diretório de entrada.', input_dir),
             ('Por favor, selecione um diretório de saída.', output_dir),
@@ -72,138 +86,66 @@ class PhotoSeparatorGUI:
                 return False
 
         return True
-
-    def process_image(self, input_file_path, file, face_dict, detector, sp, output_dir, folder_counter):
-        img = dlib.load_rgb_image(input_file_path)
-        dets = detector(img, 1)
-
-        if len(dets) > 0:
-            full_detections = dlib.full_object_detections()
-
-            for k, d in enumerate(dets):
-                shape = sp(img, d)
-                full_detection = dlib.full_object_detection(d, shape.parts())
-                full_detections.append(full_detection)
-
-            for detection in full_detections:
-                face_chip_150 = dlib.get_face_chip(img, detection, size=150, padding=0.25)
-                found_similar_face = False
-                for folder_name, reference_face in face_dict.items():
-                    if self.compare_faces(reference_face, face_chip_150):
-                        found_similar_face = True
-                        break
-
-                if not found_similar_face:
-                    with self.lock:
-                        folder_counter += 1
-                        folder_name = f'Person_{folder_counter}'
-                        face_dict[folder_name] = face_chip_150
-
-                person_folder_path = os.path.join(output_dir, folder_name)
-                if not os.path.exists(person_folder_path):
-                    os.makedirs(person_folder_path)
-
-                output_file_path = os.path.join(person_folder_path, f"{os.path.splitext(file)[0]}_face_{detection.rect.left()}_{detection.rect.top()}{os.path.splitext(file)[1]}")
-                dlib.save_image(face_chip_150, output_file_path)
-                print('\033[1;49;32m' + f'Face found in {file}!!' + '\033[m')
-        else:
-            print('\033[1;49;31m' + f"No face detected in {file}" + '\033[m')
-
-        return folder_counter, {folder_name: face_chip_150}
-
+    
 
     def separate_photos(self, input_dir, output_dir, faces_dir):
-        """Função principal para gerenciar a separação de fotos"""
-
-        # Carregue o detector de faces, o shape predictor e o modelo de reconhecimento facial
         detector = dlib.get_frontal_face_detector()
-<<<<<<< HEAD
         sp = dlib.shape_predictor(os.path.join(faces_dir, 'shape_predictor_68_face_landmarks.dat'))
 
         face_dict = {}
         folder_counter = 0
 
         for root, dirs, files in os.walk(input_dir):
-            with ThreadPoolExecutor() as executor:
-                futures = [executor.submit(self.process_image, os.path.join(root, file), file, face_dict, detector, sp, output_dir, folder_counter) for file in files if file.endswith((".jpg", ".jpeg", ".png"))]
-                for future in concurrent.futures.as_completed(futures):
-                    updated_folder_counter, updated_face_dict = future.result()
-                    with self.lock:  # Adquire o Lock
-                        folder_counter = max(folder_counter, updated_folder_counter)
-                        face_dict.update(updated_face_dict)
-=======
-        predictor = dlib.shape_predictor(os.path.join(faces_dir, "shape_predictor_68_face_landmarks.dat"))
-        self.facerec = dlib.face_recognition_model_v1(os.path.join(faces_dir, "dlib_face_recognition_resnet_model_v1.dat"))
+            for file in files:
+                if file.endswith(".jpg") or file.endswith(".jpeg") or file.endswith(".png"):
+                    input_file_path = os.path.join(root, file)
+                    img = dlib.load_rgb_image(input_file_path)
+                    dets = detector(img, 1)
 
-        # Itere sobre todas as imagens no diretório de entrada
-        for filename in os.listdir(input_dir):
-            file_path = os.path.join(input_dir, filename)
-            if not os.path.isfile(file_path):
-                continue
+                    if len(dets) > 0:
+                        full_detections = dlib.full_object_detections()
 
-            # Carregue a imagem usando o OpenCV
-            image = cv2.imread(file_path)
-            if image is None:
-                continue
+                        for k, d in enumerate(dets):
+                            shape = sp(img, d)
+                            full_detection = dlib.full_object_detection(d, shape.parts())
+                            full_detections.append(full_detection)
 
-            # Detecte faces na imagem
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            faces = detector(gray)
+                        for detection in full_detections:
+                            face_chip_150 = dlib.get_face_chip(img, detection, size=150, padding=0.25)
+                            
+                            found_similar_face = False
+                            for folder_name, reference_face in face_dict.items():
+                                if self.compare_faces(reference_face, face_chip_150):
+                                    found_similar_face = True
+                                    break
 
-            # Separe e agrupe cada face encontrada na imagem
-            for i, face in enumerate(faces):
-                # Obtenha as landmarks faciais
-                landmarks = predictor(gray, face)
+                            if not found_similar_face:
+                                folder_counter += 1
+                                folder_name = f'Person_{folder_counter}'
+                                face_dict[folder_name] = face_chip_150
 
-                # Calcule a bounding box alinhada para a face
-                aligned_face_bbox = dlib.get_face_chip_details([landmarks], size=256)[0].rect
+                            person_folder_path = os.path.join(output_dir, folder_name)
+                            if not os.path.exists(person_folder_path):
+                                os.makedirs(person_folder_path)
 
-                # Recorte a face alinhada da imagem
-                aligned_face = image[aligned_face_bbox.top():aligned_face_bbox.bottom(),
-                                    aligned_face_bbox.left():aligned_face_bbox.right()]
-
-                # Salve a face alinhada em um diretório temporário
-                temp_face_path = os.path.join(output_dir, "temp", f"{filename}_face{i}.jpg")
-                os.makedirs(os.path.dirname(temp_face_path), exist_ok=True)
-                cv2.imwrite(temp_face_path, aligned_face)
-
-                # Compare a face alinhada com as faces salvas nos subdiretórios do diretório de saída
-                found_similar_face = False
-                for subdir in os.listdir(output_dir):
-                    subdir_path = os.path.join(output_dir, subdir)
-                    if not os.path.isdir(subdir_path) or subdir == "temp":
-                        continue
-
-                    # Compare a face alinhada com a primeira face em cada subdiretório
-                    sample_face_path = os.path.join(subdir_path, os.listdir(subdir_path)[0])
-                    sample_face = cv2.imread(sample_face_path)
-
-                    if sample_face is not None:
-                        if self.compare_faces(aligned_face, sample_face):
-                            # Se uma face similar for encontrada, salve a face alinhada no subdiretório correspondente
-                            final_face_path = os.path.join(subdir_path, f"{filename}_face{i}.jpg")
-                            os.rename(temp_face_path, final_face_path)
-                            found_similar_face = True
-                            break
-
-                if not found_similar_face:
-                    # Se não encontrar nenhuma face similar, crie um novo subdiretório e salve a face alinhada nele
-                    new_subdir_path = os.path.join(output_dir, f"face_group{len(os.listdir(output_dir))}")
-                    os.makedirs(new_subdir_path, exist_ok=True)
-                    final_face_path = os.path.join(new_subdir_path, f"{filename}_face{i}.jpg")
-                    os.rename(temp_face_path, final_face_path)
-
-        # Remova o diretório temporário
-        shutil.rmtree(os.path.join(output_dir, "temp"))
->>>>>>> parent of 020503d (Update photo_separator_gui.py)
+                            output_file_path = os.path.join(person_folder_path, f"{os.path.splitext(file)[0]}_face_{detection.rect.left()}_{detection.rect.top()}{os.path.splitext(file)[1]}")
+                            dlib.save_image(face_chip_150, output_file_path)
+                            print('\033[1;49;32m' + f'Face found in {file}!!' + '\033[m')
+                    else:
+                        print('\033[1;49;31m' + f"No face detected in {file}" + '\033[m')
 
 
+    
     def compare_faces(self, face1, face2, threshold=0.6):
-        face1_descriptor = self.facerec.compute_face_descriptor(face1)
-        face2_descriptor = self.facerec.compute_face_descriptor(face2)
+        """Compara duas faces usando o modelo de reconhecimento facial."""
+        resized_face1 = cv2.resize(face1, (150, 150))
+        resized_face2 = cv2.resize(face2, (150, 150))
+        face1_descriptor = self.facerec.compute_face_descriptor(resized_face1)
+        face2_descriptor = self.facerec.compute_face_descriptor(resized_face2)
 
         distance = np.linalg.norm(np.array(face1_descriptor) - np.array(face2_descriptor))
         return distance < threshold
+
 
     def create_widgets(self):
         self.input_dir_label = tk.Label(self.root, text='Diretório de entrada das fotos:')
