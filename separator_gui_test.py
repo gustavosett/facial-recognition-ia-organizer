@@ -2,7 +2,6 @@ import unittest
 import tempfile
 import shutil
 import cv2
-from pathlib import Path
 from unittest.mock import patch
 from photo_separator_gui import PhotoSeparatorGUI
 
