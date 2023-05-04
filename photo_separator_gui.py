@@ -22,7 +22,6 @@ class PhotoSeparatorGUI:
         # Inicializa as variáveis de diretório
         self.input_dir_var = tk.StringVar()
         self.output_dir_var = tk.StringVar()
-        self.faces_dir_var = tk.StringVar()
 
         # Cria e organiza os widgets na janela
         self.create_widgets()
