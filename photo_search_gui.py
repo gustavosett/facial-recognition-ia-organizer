@@ -9,7 +9,6 @@ import numpy as np
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import threading
-import pandas as pd
 
 face_dict = {}
 image_hashes = set()
@@ -40,39 +39,6 @@ class PhotoSearchGUI:
 
     def image_hash(self, image):
         return hashlib.md5(image).hexdigest()
-
-    def check_reference_images(self, input_dir):
-        """Verifica a qualidade das imagens de referência."""
-        for root, _, files in os.walk(input_dir):
-            for file in files:
-                if file.endswith(".jpg") or file.endswith(".jpeg") or file.endswith(".png"):
-                    input_file_path = os.path.join(root, file)
-                    img = dlib.load_rgb_image(input_file_path)
-                    dets = self.detector(img, 1)
-
-                    if len(dets) == 0:
-                        self.print_error(
-                            'Imagem de referência ruim', f"A imagem de referência '{file}' não possui um rosto detectável. Por favor, use uma imagem de melhor qualidade.")
-                        return False
-        return True
-
-    def compare_faces(self, face1, face2):
-        """Compara duas faces usando o modelo de reconhecimento facial."""
-        try:
-            threshold = self.threshold_var.get()
-            resized_face1 = cv2.resize(face1, (150, 150))
-            resized_face2 = cv2.resize(face2, (150, 150))
-            face1_descriptor = self.facerec.compute_face_descriptor(
-                resized_face1)
-            face2_descriptor = self.facerec.compute_face_descriptor(
-                resized_face2)
-
-            distance = np.linalg.norm(
-                np.array(face1_descriptor) - np.array(face2_descriptor))
-            return distance < threshold
-        except Exception as e:
-            self.print_error('Erro ao comparar faces', str(e))
-            return False
 
     def check_reference_images(self, input_dir):
         """Verifica a qualidade das imagens de referência."""
@@ -132,45 +98,6 @@ class PhotoSearchGUI:
         except Exception as e:
             self.print_error('Erro ao executar busca de fotos', str(e))
 
-    def process_image(self, args):
-        file_path, persons_dir, output_dir = args
-        try:
-            with open(file_path, 'rb') as f:
-                data = f.read()
-            if self.image_hash(data) in image_hashes:
-                return
-            image_hashes.add(self.image_hash(data))
-
-            img = dlib.load_rgb_image(file_path)
-
-        except RuntimeError:
-            print(f"Skipping {file} due to invalid image file.")
-            return
-
-        dets = self.detector(img, 1)
-        if len(dets) == 0:
-            return
-
-        for det in dets:
-            shape = self.sp(img, det)
-            face_descriptor = self.facerec.compute_face_descriptor(img, shape)
-
-            for person_name, reference_descriptor in face_dict.items():
-                distance = np.linalg.norm(
-                    np.array(face_descriptor) - np.array(reference_descriptor))
-
-                if distance < self.threshold_var.get():
-                    person_folder = os.path.join(output_dir, person_name)
-                    if not os.path.exists(person_folder):
-                        os.makedirs(person_folder)
-
-                    output_file_path = os.path.join(person_folder, file)
-                    # verifica se a foto já foi salva para evitar duplicatas
-                    if not os.path.isfile(output_file_path):
-                        cv2.imwrite(output_file_path, cv2.cvtColor(
-                            np.array(img), cv2.COLOR_RGB2BGR))
-
-
     def print_error(self, title, message):
         messagebox.showerror(title, message)
         print(f'{title}: {message}')
@@ -229,16 +156,18 @@ class PhotoSearchGUI:
                     for det in dets:
                         shape = self.sp(img, det)
                         face_descriptor = self.facerec.compute_face_descriptor(img, shape)
-                        person_name = os.path.basename(root)
+                        person_name = os.path.basename(file).split('.')[0]
                         face_dict[person_name] = face_descriptor
-
+        
+        threshold = self.threshold_var.get()
+        
         # Cria uma lista de todos os arquivos para processamento
         all_files = []
         for root, dirs, files in os.walk(search_dir):
             for file in files:
                 if file.lower().endswith(('.jpg', '.jpeg', '.png')):
                     file_path = os.path.join(root, file)
-                    all_files.append((file_path, persons_dir, output_dir, self.detector, self.sp))
+                    all_files.append((file_path, persons_dir, output_dir, self.detector, self.sp, face_dict, threshold))
 
         with Pool(cpu_count()) as p:
             list(tqdm(p.imap(process_image_function, all_files), total=len(all_files), ncols=70, desc="Processing Images"))
@@ -303,7 +232,7 @@ class PhotoSearchGUI:
         self.root.mainloop()
 
 def process_image_function(args):
-    file_path, persons_dir, output_dir, detector, sp = args
+    file_path, persons_dir, output_dir, detector, sp, face_dict, threshold = args
 
     facerec = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")
 
@@ -317,19 +246,15 @@ def process_image_function(args):
         face_descriptor = facerec.compute_face_descriptor(img, shape)
 
         for person, reference_descriptor in face_dict.items():
-            print(person)
             dist = np.linalg.norm(np.array(face_descriptor) - np.array(reference_descriptor))
-            if dist < 0.6:
-                print(f'confirmado é a pessoa: {person}')
+            if dist < threshold:
                 save_folder = os.path.join(output_dir, person)
                 if not os.path.exists(save_folder):
-                    print(f'criando diretório para: {person}')
                     os.makedirs(save_folder)
 
                 file_name = os.path.basename(file_path)
                 save_path = os.path.join(save_folder, file_name)
                 shutil.copyfile(file_path, save_path)
-                print('arquivo copiado')
                 break
 
 
