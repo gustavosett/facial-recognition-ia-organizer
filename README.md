@@ -1,53 +1,53 @@
-# Separador de Fotos por Reconhecimento Facial
+# Photo Separator with Face Recognition
 
-Este software utiliza técnicas de reconhecimento facial para separar fotos de diferentes indivíduos em pastas distintas, facilitando a organização de grandes volumes de imagens.
+This software employs facial recognition techniques to separate photos of different individuals into distinct folders, making it easier to organize large volumes of images.
 
-## Funcionalidades
+## Features
 
-- Seleção de diretório de entrada com as fotos a serem organizadas.
-- Seleção de diretório de saída onde as fotos organizadas serão salvas em subpastas.
-- Utiliza IA para reconhecimento facial e agrupamento das imagens.
-- Interface gráfica amigável para fácil utilização.
+- Select the input directory with photos to be organized.
+- Select the output directory where the organized photos will be saved in subfolders.
+- Utilizes AI for facial recognition and grouping of images.
+- User-friendly graphical interface for easy use.
 
-## Pré-requisitos
+## Prerequisites
 
 - Python 3.x
-- Bibliotecas: Tkinter, dlib, cv2 (OpenCV), numpy
+- Libraries: Tkinter, dlib, cv2 (OpenCV), numpy
 
-## Como utilizar
+## How to Use
 
-1. Execute o software.
-2. Selecione o diretório de entrada com as fotos a serem organizadas.
-3. Selecione o diretório de saída onde as fotos organizadas serão salvas.
-4. Clique em "Executar" e aguarde enquanto o software organiza as fotos.
+1. Run the software.
+2. Select the input directory with the photos to be organized.
+3. Select the output directory where the organized photos will be saved.
+4. Click "Run" and wait while the software organizes the photos.
 
-## Instalação das dependências
+## Installing Dependencies
 
-Instale as dependências utilizando pip:
+Install dependencies using pip:
 
 ```
 pip install dlib opencv-python numpy tk
 ```
 
-## Estrutura do Projeto
+## Project Structure
 
 ```
-/photo_separator_gui.py    - Script principal contendo a lógica e a interface gráfica.
-/test_photo_separator.py   - Testes unitários para o software.
-/face_samples/             - (Opcional) Amostras de faces para testes.
+/photo_separator_gui.py    - Main script containing logic and GUI.
+/test_photo_separator.py   - Unit tests for the software.
+/face_samples/             - (Optional) Face samples for testing.
 ```
 
-## Como contribuir
+## How to Contribute
 
-1. Faça um fork do projeto.
-2. Crie uma nova branch para suas modificações.
-3. Envie um pull request.
+1. Fork the project.
+2. Create a new branch for your modifications.
+3. Submit a pull request.
 
-## Licença
+## License
 
-Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
+This project is under the MIT license. See the LICENSE file for more details.
 
-## Autores
+## Authors
 
 - @gustavosett
 
