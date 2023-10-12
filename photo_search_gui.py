@@ -2,7 +2,6 @@ import hashlib
 from multiprocessing import Pool, cpu_count
 import os
 import shutil
-import cv2
 import dlib
 from tqdm import tqdm
 import numpy as np
@@ -13,8 +12,10 @@ import threading
 face_dict = {}
 image_hashes = set()
 
+
 class PhotoSearchGUI:
     def __init__(self):
+        """Inicialização do GUI e carregamento dos modelos de reconhecimento facial."""
         self.root = tk.Tk()
         self.root.title('Buscador de Fotos por Reconhecimento Facial')
 
@@ -38,6 +39,7 @@ class PhotoSearchGUI:
                 'Erro ao carregar modelo de reconhecimento facial', str(e))
 
     def image_hash(self, image):
+        """Calcula e retorna o hash MD5 de uma imagem."""
         return hashlib.md5(image).hexdigest()
 
     def check_reference_images(self, input_dir):
@@ -56,6 +58,7 @@ class PhotoSearchGUI:
         return True
 
     def select_persons_dir(self):
+        """Permite que o usuário selecione o diretório com as imagens das pessoas."""
         try:
             persons_dir = filedialog.askdirectory()
             if persons_dir:
@@ -66,6 +69,7 @@ class PhotoSearchGUI:
                 'Erro ao selecionar diretório de pessoas', str(e))
 
     def select_search_dir(self):
+        """Permite que o usuário selecione o diretório onde a busca será realizada."""
         try:
             search_dir = filedialog.askdirectory()
             if search_dir:
@@ -75,6 +79,7 @@ class PhotoSearchGUI:
             self.print_error('Erro ao selecionar diretório de busca', str(e))
 
     def select_output_dir(self):
+        """Permite que o usuário selecione o diretório onde as fotos encontradas serão salvas."""
         try:
             output_dir = filedialog.askdirectory()
             if output_dir:
@@ -84,6 +89,7 @@ class PhotoSearchGUI:
             self.print_error('Erro ao selecionar diretório de saída', str(e))
 
     def run(self):
+        """Inicia a busca por fotos, verificando os diretórios e criando uma nova thread para a busca."""
         persons_dir = self.persons_dir_var.get()
         search_dir = self.search_dir_var.get()
         output_dir = self.output_dir_var.get()
@@ -99,10 +105,12 @@ class PhotoSearchGUI:
             self.print_error('Erro ao executar busca de fotos', str(e))
 
     def print_error(self, title, message):
+        """Exibe uma mensagem de erro via GUI e imprime no console."""
         messagebox.showerror(title, message)
         print(f'{title}: {message}')
 
     def check_directories(self, persons_dir, search_dir, output_dir):
+        """Verifica se os diretórios selecionados são válidos e diferentes entre si."""
         try:
             error_messages = [
                 ('Por favor, selecione um diretório de pessoas.', persons_dir),
@@ -131,14 +139,19 @@ class PhotoSearchGUI:
             return False
 
     def search_photos(self, persons_dir, search_dir, output_dir):
+        # Procura por fotos nas imagens de referência e cria descritores faciais.
+        # Realiza a busca nas imagens do diretório de busca e salva no diretório de saída.
+
         # verifica se a pasta de referência de pessoas existe
         if not os.path.exists(persons_dir):
-            tk.messagebox.showerror("Directory not found", "The persons directory was not found.")
+            tk.messagebox.showerror(
+                "Directory not found", "The persons directory was not found.")
             return
 
         # verifica se a pasta de busca existe
         if not os.path.exists(search_dir):
-            tk.messagebox.showerror("Directory not found", "The search directory was not found.")
+            tk.messagebox.showerror(
+                "Directory not found", "The search directory was not found.")
             return
 
         # verifica se a pasta de saída existe, senão, a cria
@@ -155,25 +168,28 @@ class PhotoSearchGUI:
 
                     for det in dets:
                         shape = self.sp(img, det)
-                        face_descriptor = self.facerec.compute_face_descriptor(img, shape)
+                        face_descriptor = self.facerec.compute_face_descriptor(
+                            img, shape)
                         person_name = os.path.basename(file).split('.')[0]
                         face_dict[person_name] = face_descriptor
-        
+
         threshold = self.threshold_var.get()
-        
+
         # Cria uma lista de todos os arquivos para processamento
         all_files = []
         for root, dirs, files in os.walk(search_dir):
             for file in files:
                 if file.lower().endswith(('.jpg', '.jpeg', '.png')):
                     file_path = os.path.join(root, file)
-                    all_files.append((file_path, persons_dir, output_dir, self.detector, self.sp, face_dict, threshold))
+                    all_files.append(
+                        (file_path, persons_dir, output_dir, self.detector, self.sp, face_dict, threshold))
 
         with Pool(cpu_count()) as p:
-            list(tqdm(p.imap(process_image_function, all_files), total=len(all_files), ncols=70, desc="Processing Images"))
-
+            list(tqdm(p.imap(process_image_function, all_files),
+                 total=len(all_files), ncols=70, desc="Processing Images"))
 
     def create_widgets(self):
+        """Cria os widgets (labels, botões, etc.) do GUI."""
         self.persons_dir_label = tk.Label(
             self.root, text='Diretório com fotos das pessoas:')
         self.persons_dir_entry = tk.Entry(
@@ -203,6 +219,7 @@ class PhotoSearchGUI:
             self.root, text='Iniciar busca', command=self.run)
 
     def arrange_widgets(self):
+        """Organiza os widgets na grade da janela do GUI."""
         self.persons_dir_label.grid(
             row=0, column=0, sticky='w', padx=5, pady=5)
         self.persons_dir_entry.grid(
@@ -231,10 +248,13 @@ class PhotoSearchGUI:
         """Inicia o loop principal da janela."""
         self.root.mainloop()
 
+
 def process_image_function(args):
+    """Processa uma imagem, detecta rostos e, se correspondem a algum rosto de referência, copia a imagem para o diretório de saída."""
     file_path, persons_dir, output_dir, detector, sp, face_dict, threshold = args
 
-    facerec = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")
+    facerec = dlib.face_recognition_model_v1(
+        "dlib_face_recognition_resnet_model_v1.dat")
 
     img = dlib.load_rgb_image(file_path)
     dets = detector(img, 1)
@@ -246,7 +266,8 @@ def process_image_function(args):
         face_descriptor = facerec.compute_face_descriptor(img, shape)
 
         for person, reference_descriptor in face_dict.items():
-            dist = np.linalg.norm(np.array(face_descriptor) - np.array(reference_descriptor))
+            dist = np.linalg.norm(
+                np.array(face_descriptor) - np.array(reference_descriptor))
             if dist < threshold:
                 save_folder = os.path.join(output_dir, person)
                 if not os.path.exists(save_folder):
